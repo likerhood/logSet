@@ -1,486 +1,270 @@
-import json
+import os
+import zipfile
+import wave
+import pyaudio
+from tkinter import *
+import tkinter.messagebox as messagebox
+from tkinter import scrolledtext
+from tkinter.ttk import Combobox
 import re
-import tkinter
-import time
-import datetime
-from tkinter import messagebox
 
+import windnd
 
+from LogFilePro import LogFilePro
 
-class LogFilePro:
-    def __init__(self, file_path, result_text, target_time):
-        self.file_path = file_path
-        self.result_text = result_text
-        # 目标时间
-        self.target_time = target_time
-        # 日志关键词
-        self.keywords_filename = 'voicetrigger_keywords.json'
-        self.keywords = []
-        self.load_keywords()
+# 请提示LogAn
+class LogAnalysisPro:
+    def __init__(self, init_window_name):
+        self.log_files = []
+        self.pcm_files = []
+        # self.log_files_map = {}
+        self.init_window_name = init_window_name
+        self.dumpVoiceTriggerPath = "AAAVoicetriggerDump"
 
-        # 关键日志记录
-        self.log_lines = []
-        # 日志时间匹配
-        self.keylog_time = ""
-        # 全局日志扫描
-        self.global_log_lines = []
+     # 设置窗口
+    def set_init_window(self):
+        self.init_window_name.title('LogAnalysisPro')
+        self.init_window_name.geometry('1420x795+350+150')
+        self.init_window_name['bg'] = 'AliceBlue'
+        self.init_window_name.attributes('-alpha', 1)
 
-        # 日志事件分类
-        self.event_list = []
-        self.voice_trigger_scheme = None
-        self.voice_trigger_version = ''
-        self.build_date = ''
-        self.device_code = ''
-        # self.device_name = ''
-        self.phone_name = ''
-        self.voice_print_engine_version = ''
-        # self.wakeup_engine_version = ''
-
-        # 未收到一级唤醒事件原因
-        self.microphone_error = []
-        self.switcher_error = []
-        # 二级唤醒失败原因
-        self.second_ladder_fail = []
-        # 录制失败原因
-        self.record_fail = []
-        # 录制失败的关键日志记录
-        self.record_fail_log = []
+        # 标签
+        self.file_path_label = Label(self.init_window_name, text='文件/压缩包 拖拽处↓', bg='AliceBlue', font=('楷体', 14), width=20, height=1, relief=FLAT)
+        self.file_path_label.place(x=0, y=0)
+        self.file_path_text = Text(self.init_window_name, width=32, height=5, bg='White', font=('楷体', 12))
+        self.file_path_text.place(x=0, y=23)
         
+        # 添加日期输入框和按钮
+        self.date_entry_label = Label(self.init_window_name, text='输入时间 (07-26 22:01:00):', bg='AliceBlue', font=('楷体', 13), width=28, height=1, relief=FLAT)
+        self.date_entry_label.place(x=0, y=120)
+        self.date_entry = Entry(self.init_window_name, width=28, font=('楷体', 13))
+        self.date_entry.place(x=0, y=145)
+
+        # self.date_button = Button(self.init_window_name, text='确认日期', bg='AliceBlue', font=('楷体', 13), width=12, height=1, command=self.process_date)
+        # self.date_button.place(x=0, y=170)
+
+        self.scheme_label = Label(self.init_window_name, text='唤醒方案', bg='AliceBlue', font=('楷体', 13), width=8, height=1, relief=FLAT)
+        self.scheme_label.place(x=0, y=210)
+        self.scheme_text = Text(self.init_window_name, width=28, height=1, bg='White', font=('楷体', 13))
+        self.scheme_text.place(x=0, y=235)
+
+        self.voice_trigger_version_label = Label(self.init_window_name, text='voicetrigger版本', bg='AliceBlue', font=('楷体', 13), width=16, height=1, relief=FLAT)
+        self.voice_trigger_version_label.place(x=0, y=260)
+        self.voice_trigger_version_text = Text(self.init_window_name, width=28, height=1, bg='White', font=('楷体', 13))
+        self.voice_trigger_version_text.place(x=0, y=285)      
         
+        self.build_date_label = Label(self.init_window_name, text='build date', bg='AliceBlue', font=('楷体', 13), width=10, height=1, relief=FLAT)
+        self.build_date_label.place(x=0, y=310)
+        self.build_date_text = Text(self.init_window_name, width=28, height=1, bg='White', font=('楷体', 13))
+        self.build_date_text.place(x=0, y=335)
 
-    # 加载json文件的日志关键词
-    def load_keywords(self):
-        # 从JSON文件中加载关键词
-        with open(self.keywords_filename, 'r', encoding='utf-8') as file:
-            keywords_data = json.load(file)
-        self.keywords = keywords_data['keywords']
+        self.device_code_label = Label(self.init_window_name, text='设备编号', bg='AliceBlue', font=('楷体', 13), width=8, height=1, relief=FLAT)
+        self.device_code_label.place(x=0, y=360)
+        self.device_code_text = Text(self.init_window_name, width=28, height=8, bg='White', font=('楷体', 13))
+        self.device_code_text.place(x=0, y=390)
+
+        self.phone_name_label = Label(self.init_window_name, text='手机名称', bg='AliceBlue', font=('楷体', 13), width=8, height=1, relief=FLAT)
+        self.phone_name_label.place(x=0, y=490)
+        self.phone_name_text = Text(self.init_window_name, width=28, height=1, bg='White', font=('楷体', 13))
+        self.phone_name_text.place(x=0, y=520)
+
+        self.voice_print_engine_version_label = Label(self.init_window_name, text='算法模型', bg='AliceBlue', font=('楷体', 13), width=8, height=1, relief=FLAT)
+        self.voice_print_engine_version_label.place(x=0, y=550)
+        self.voice_print_engine_version_text = Text(self.init_window_name, width=28, height=9, bg='White', font=('楷体', 13))
+        self.voice_print_engine_version_text.place(x=0, y=580)
+
+        # 文本框
+        self.pcm_files_list_label = Label(self.init_window_name, text='音频列表', bg='AliceBlue', font=('楷体', 14), width=8, height=1, relief=FLAT)
+        self.pcm_files_list_label.place(x=265, y=0)
+        self.pcm_files_list = Combobox(self.init_window_name, width=150)
+        self.pcm_files_list.bind("<<ComboboxSelected>>", self.pcm_file_callback)
+        self.pcm_files_list.place(x=265, y=23)
+
+        self.log_files_list_label = Label(self.init_window_name, text='日志列表', bg='AliceBlue', font=('楷体', 14), width=8, height=1, relief=FLAT)
+        self.log_files_list_label.place(x=265, y=46)
+        self.log_files_list = Combobox(self.init_window_name, width=150)
+        self.log_files_list.bind("<<ComboboxSelected>>", self.log_file_callback)
+        self.log_files_list.place(x=265, y=69)
+
+        self.result_data_label = Label(self.init_window_name, text='日志分析结果', bg='AliceBlue', font=('楷体', 14), width=12, height=1, relief=FLAT)
+        self.result_data_label.place(x=265, y=92)
+        self.result_data_text = scrolledtext.ScrolledText(self.init_window_name, width=126, height=38, font=('楷体', 13))
+        self.result_data_text.place(x=265, y=115)
+
+        windnd.hook_dropfiles(self.init_window_name, func=self.dragged_files)
+
+    # def process_date(self):
+    #     date_str = self.date_entry.get()
+    #     if re.match(r'\d{2}-\d{2} \d{2}:\d{2}:\d{2}', date_str):
+    #         messagebox.showinfo(title='日期输入', message=f'您输入的日期时间是: {date_str}')
+    #         # 这里可以添加处理输入日期时间的逻辑
+    #         print(f'输入日期时间: {date_str}')
+    #     else:
+    #         messagebox.showwarning(title='格式错误', message='请输入正确的日期时间格式 (07-26 22:01:00)')
 
 
-    # 全局搜索遍历
-    def global_search(self):
-        pass
 
-    # 分析日志并输出日志结果
-    def start_process(self):
-
-        # 输入问题发生时间
-        print("self.target_time", self.target_time)
-        if re.match(r'\d{2}-\d{2} \d{2}:\d{2}:\d{2}', self.target_time):
-            # messagebox.showinfo(title='日期输入', message=f'您输入的日期时间是: {self.target_time}')
-            # # 这里可以添加处理输入日期时间的逻辑
-            print(f'输入日期时间: {self.target_time}')
+    def dragged_files(self, files):
+        self.clear_text()
+        file_path = '\n'.join((item.decode('gbk') for item in files))
+        self.log_files_list.set('')
+        self.file_path_text.delete(0.0, END)
+        self.file_path_text.insert(0.0, file_path)
+        self.log_files = []
+        self.pcm_files = []
+        print("real",file_path)
+        self.unzip_folder(file_path)
+   
+    def unzip_folder(self, file_path):
+        # 压缩包先解压后再分析，文件直接分析
+        print("file path:"+file_path)
+        if zipfile.is_zipfile(file_path):
+            self.unzipBugReport(file_path)
         else:
-            # 全局搜索
-            self.global_search()
-            messagebox.showwarning(title='格式错误', message='请输入正确的日期 (例如07-26 22:01:00)')
-            return
+            self.clear_text()
+            self.log_files_list["value"] = []
+            self.analysis_log_file(file_path)
 
-        # 读取日志文件
-        self.read_log_file()
 
-        # 未收到一级唤醒事件
-        if len(self.event_list) == 0:
-            if len(self.record_fail) != 0:
-                self.analysis_record_fail()
-            else:
-                self.result_text.insert(tkinter.END, '录制唤醒词成功\n')
-                self.result_text.insert(tkinter.END, '未收到一级唤醒事件！\n\n')
-                # 在这里继续分析具体未收到一级唤醒事件的原因
-                self.analysis_first_wakelose_event()
-                # if not self.file_path.startswith('bugReport-'):
-                #     self.result_text.insert(tkinter.END, open(self.file_path, encoding='utf-8', errors='ignore').read())
-                self.result_text.insert(tkinter.END, self.log_lines)
+    def log_file_callback(self, event):
+        # file_path = self.log_files_map[self.log_files[self.log_files_list.current()]]
+        self.analysis_log_file(self.log_files[self.log_files_list.current()])
 
-        # 收到一级唤醒事件
-        if self.voice_trigger_scheme == 'MTK' or self.voice_trigger_scheme == 'MTK自研':
-            self.process_mtk()
-        elif self.voice_trigger_scheme == '自研E':
-            self.process_e()
-        elif self.voice_trigger_scheme == '高通':
-            self.process_qualcomm()
+    def pcm_file_callback(self, event):
+        pcm_file = self.pcm_files[self.pcm_files_list.current()]
+        self.analysis_pcm_file(pcm_file)
+
+    def analysis_pcm_file(self, pcm_file):
+        player = pyaudio.PyAudio()
+        stream = player.open(format=player.get_format_from_width(2), channels=1, rate=16000, output=True)
+        with open(pcm_file, "rb") as file:
+            stream.write(file.read())
+        stream.stop_stream()
+        stream.close()
+        player.terminate()
+
+    def analysis_log_file(self, file_path):
+        self.clear_text()
+        date_str = self.date_entry.get()
+
+        log_file = LogFilePro(file_path, self.result_data_text, date_str)
+        log_file.start_process()
+        self.scheme_text.insert(END, log_file.voice_trigger_scheme)
+        self.voice_trigger_version_text.insert(END, log_file.voice_trigger_version)
+        self.build_date_text.insert(END, log_file.build_date)
+        self.device_code_text.insert(END, log_file.device_code)
+        # self.device_name_text.insert(END, log_file.device_name)
+        self.phone_name_text.insert(END, log_file.phone_name)
+        self.voice_print_engine_version_text.insert(END, log_file.voice_print_engine_version)
+        # self.wakeup_engine_version_version_text.insert(END, log_file.wakeup_engine_version)
+
+    def clear_text(self):
+        self.result_data_text.delete('0.0', END)
+        self.scheme_text.delete('0.0', END)
+        self.voice_trigger_version_text.delete('0.0', END)
+        self.build_date_text.delete('0.0', END)
+        self.device_code_text.delete('0.0', END)
+        # self.device_name_text.delete('0.0', END)
+        self.phone_name_text.delete('0.0', END)
+        # self.android_version_text.delete('0.0', END)
+        # self.sdk_version_text.delete('0.0', END)
+        self.voice_print_engine_version_text.delete('0.0', END)
+        # self.wakeup_engine_version_version_text.delete('0.0', END)
+
+    def unzipBugReport(self, bugReportFileName):
+        fz = zipfile.ZipFile(bugReportFileName, 'r')
+        dump_path = os.path.join(bugReportFileName[:-4], self.dumpVoiceTriggerPath)
+        print("路劲",dump_path)
+        dest_path = bugReportFileName[:-4]
+        for file in fz.namelist():
+            fz.extract(file, bugReportFileName[:-4])
+            # 把unzip_file_path字符串转成_path变量
+            if os.path.basename(file) == "voice_trigger.zip":
+                self.unzipInerVoiceTriggerAudio(file, dest_path, dump_path)
+            elif os.path.basename(file) == "encrypt_voice_trigger.zip":
+                self.unzipInerVoiceTriggerAudio(file, dest_path, dump_path)
+                print("unzip encrypt_voice_trigger.zip")
+            elif os.path.basename(file) == "voice_trigger_log.zip":
+                self.unzipInerVoiceTriggerLog(file, dest_path, dump_path)
+            elif os.path.basename(file).endswith('.zip') and os.path.basename(file).startswith('bugreport-'):
+                self.unzip284BugLog(file, dest_path, dump_path)
+
+        if len(self.log_files) == 0:
+            messagebox.showinfo(title=None, message="无有效日志！")
         else:
-            self.voice_trigger_scheme = ''
-
-        text = "\n\n\n 问题发生时间前后三分钟的关键日志输出如下，可供检查和分析日志问题：\n\n"
-        self.result_text.insert(tkinter.END, text)
-        self.result_text.insert(tkinter.END, self.log_lines)
+            self.log_files_list["value"] = self.log_files
+            self.pcm_files_list["value"] = self.pcm_files
 
 
-    def check_switch_on(self):
-        '''
-        function: 
-         1. 检查开关是否打开
-         2. 将相关日志保存起来
-        return:
-         布尔值
-        
-        '''
-        return False
-    
-
-    def check_micphone(self):
-        '''
-            mic被占用
-                AudioRecord: start没有packageName对应的AudioRecord: stop
-                例如：
-                05-06 10:22:42.760 10179 14344 15668 W AudioRecord: start mSessionID=257 start(63): sync event 0 trigger session 0  packageName: com.miui.voiceassist
-            speaker增益导致无法唤醒
-                在"AudioTrack: start"和"AudioTrack: stop"之间（packageName一致），存在无法唤醒
-                例如：
-                05-06 10:33:06.786 media  3029 22453 W AudioTrack: start(106): prior state:STATE_STOPPED packageName: com.miui.player
-                05-06 10:33:16.907 media  3029 22453 W AudioTrack: stop(sessionID=401), packageName: com.miui.player
-            
-        '''
-        flag = False
-        # audio_record变量
-        audio_packageName_record = {}
-        audio_record = []
-        issues_record = []
-        # audio_track变量
-        audio_packageName_track = {}
-        audio_track = []
-        issues_track = []
-        packageName_pattern = re.compile(r'packageName: (\S+)')
-        
-        # 遍历日志
-        for line in self.log_lines:
-            if re.search('AudioRecord: start', line) is not None:
-                audio_record.append(line)
-                start_package = packageName_pattern.search(line)
-                if start_package:
-                    package_name = start_package.group(1)
-                    if package_name not in audio_packageName_record:
-                        audio_packageName_record[package_name] = []
-                    audio_packageName_record[package_name].append(line)
-            elif re.search('AudioRecord: stop', line) is not None:
-                audio_record.append(line)
-                stop_package = packageName_pattern.search(line)
-                if stop_package:
-                    package_name = stop_package.group(1)
-                    if package_name in audio_packageName_record and audio_packageName_record[package_name]:
-                        audio_packageName_record[package_name].pop(0)
-                    # else:
-                    #     issues_record.append(line)
-            elif re.search('AudioTrack: start', line) is not None:
-                audio_track.append(line)
-                start_package = packageName_pattern.search(line)
-                if start_package:
-                    package_name = start_package.group(1)
-                    if package_name not in audio_packageName_track:
-                        audio_packageName_track[package_name] = []
-                    audio_packageName_track[package_name].append(line)
-            elif re.search('AudioTrack: stop', line) is not None:
-                audio_track.append(line)
-                stop_package = packageName_pattern.search(line)
-                if stop_package:
-                    package_name = stop_package.group(1)
-                    if package_name in audio_packageName_track and audio_packageName_track[package_name]:
-                        audio_packageName_track[package_name].pop(0)
-                    # else:
-                    #     issues_track.append(line)
-
-        # 收集record所有没有对应stop的start日志
-        for package_name, starts in audio_packageName_record.items():
-            for start in starts:
-                issues_record.append(start)
-
-        # 收集track所有没有对应stop的start日志
-        for package_name, starts in audio_packageName_track.items():
-            for start in starts:
-                issues_track.append(start)
-        if len(issues_record) != 0:
-            self.microphone_error.append("mic被占用\n")
-            # 将关键日志输出
-            for item in issues_record:
-                self.microphone_error.append(item)
-            self.microphone_error.append("-------------------------------------------\n")
-            self.microphone_error.append("check——全部日志输出：在AudioTrack: start和AudioTrack: stop之间（packageName一致），存在无法唤醒\n")
-            # 将全部有关日志输出，便于检查
-            for item in audio_record:
-                self.microphone_error.append(item)
-            self.microphone_error.append("\n\n ------------------------------------------------------\n")
-            flag = True
-        if len(issues_track) != 0:
-            self.microphone_error.append("speaker增益导致无法唤醒\n")
-            # 将关键日志输出
-            for item in issues_track:
-                self.microphone_error.append(item)
-            self.microphone_error.append("-------------------------------------------\n")
-            self.microphone_error.append("check——全部日志输出：AudioRecord: start没有packageName对应的AudioRecord: stop\n")
-            # 将全部有关日志输出，便于检查
-            for item in audio_track:
-                self.microphone_error.append(item)
-            self.microphone_error.append("\n\n ------------------------------------------------------\n")
-            flag = True
-
-        return flag
+    def unzip284BugLog(self, file, dest_path, dump_path):
+        srcfile = zipfile.ZipFile(os.path.join(dest_path, file))
+        for file_name in srcfile.namelist():
+            srcfile.extract(file_name, dump_path)
+            if os.path.basename(file_name).startswith('bugreport-') and os.path.basename(file_name).endswith('.txt'):
+                self.log_files.append(dump_path + "/" + file_name)
+                print()
+                print("unzip284BugLog filelist:" + file_name)
+                print()
 
 
+    def unzipInerVoiceTriggerLog(self, file, dest_path, dump_path):
+        srcfile = zipfile.ZipFile(os.path.join(dest_path, file))
+        for file_name in srcfile.namelist():
+            srcfile.extract(file_name, dump_path)
+            self.log_files.append(dump_path + "/" + file_name)
+            # print("unzipInerVoiceTriggerLog filelist:" + file_name)
 
-    # 未唤醒一级事件的原因分析
-    def analysis_first_wakelose_event(self):
-        
-        # 开关问题分析
-        is_switch_on = False
-        is_micphone_error = False
-        is_switch_on= self.check_switch_on()
-
-        # 不是开关问题,则分析其他原因
-        if is_switch_on == False:
-            is_micphone_error = self.check_micphone()
-
-        # 开关问题
-        reason_show = []
-        if(is_switch_on == True):
-            reason_show.append("开关问题, 呼唤小爱时语音唤醒未打开\n")
-            reason_show.extend(self.switcher_error)
-        elif(is_micphone_error == True):
-            reason_show.append("mic或者speaker增益问题，未收到一级唤醒事件\n")
-            reason_show.extend(self.microphone_error)
-        else:
-            reason_show.append("其他原因\n")
-        self.result_text.insert(tkinter.END, reason_show)
-
-
-
-    # 提取时间戳
-    def parse_log_timestamp(self, line):
-        # 解析日志行中的时间戳
-        timestamp_pattern = re.compile(r'(\d{2}-\d{2} \d{2}:\d{2}:\d{2})')
-        match = timestamp_pattern.search(line)
-        if match:
-            timestamp_str = match.group(1)
-            # 将字符串转换为datetime对象，并设置为当前年份
-            return datetime.datetime.strptime(timestamp_str, '%m-%d %H:%M:%S').replace(year=datetime.datetime.now().year)
-        return None
-
-    # 获取目标时间附近是日志
-    def extract_effective_logs(self):
-        file = open(self.file_path, encoding='utf-8', errors='ignore')
-        log_file = file.readlines()
-        # 将目标时间字符串转换为datetime对象
-        target_time = datetime.datetime.strptime(self.target_time, '%m-%d %H:%M:%S').replace(year=datetime.datetime.now().year)
-        # 计算前后时间范围
-        start_time = target_time - datetime.timedelta(minutes=3)
-        end_time = target_time + datetime.timedelta(minutes=3)
-        print("target_time :", target_time)
-
-        '''
-        1. 筛选出有效时间范围内的全部日志
-        '''
-        result_lines = []  # 存储提取的日志行
-        step = 2000  # 每次处理的行数
-        total_lines = len(log_file)  # 日志总行数
-        i = 0  # 行索引
-        while i < total_lines:
-            # 获取当前位置和下一步位置的时间戳
-            current_time = self.parse_log_timestamp(log_file[i])
-            next_i = min(i + step, total_lines - 1)
-            next_time = self.parse_log_timestamp(log_file[next_i])
-            # 检查当前时间或下一时间是否在目标范围内
-            if (current_time and start_time <= current_time <= end_time) or (next_time and start_time <= next_time <= end_time):
-                # 如果在范围内，添加到结果列表
-                result_lines.extend(log_file[i:next_i + 1])
-            i += step  # 移动到下一步
-
-        '''
-        2. 筛选具有关键词的日志
-        '''
-        self.log_lines = []
-        for line in result_lines:
-            # 如果行中包含任何关键词，则添加到过滤列表
-            if any(keyword in line for keyword in self.keywords):
-                self.log_lines.append(line)
-
-        print("result_lines len", len(result_lines))
-        print("self.log_lines len", len(self.log_lines))
-        
-
-    # 读取文件
-    def read_log_file(self):
-
-        self.extract_effective_logs()
-        rows = len(self.log_lines)
-        is_processed_info = False
-        is_get_package_info = False
-        is_get_devie_code = False
-        i = 0
-        cnt = 10
-        while i < rows:
-            if re.search('rice volume too low', self.log_lines[i]) is not None:
-                reason = '唤醒时record增益导致的无法唤醒 \n'
-                self.second_ladder_fail.append(reason)
-            if re.search('verifyVoicePrintData: registerState=13', self.log_lines[i]) is not None:
-                reason = '录制唤醒词失败\n原因：录制时record增益问题导致录制失败 \n\n'
-                self.record_fail.append(reason)
-                self.record_fail_key_logs(self.record_fail_log, i, cnt)
-                i += cnt
-            elif re.search('MTK-VowUtils: send voice Command', self.log_lines[i]) is not None:
-                reason = '录制唤醒词失败\n原因：未知 \n'
-                self.record_fail.append(reason)
-                self.record_fail_key_logs(self.record_fail_log, i, cnt)
-                i += cnt
-
-
-            if re.search('onRecognition:', self.log_lines[i]) is None:
-                i += 1
-                continue
-            # 找到一次一级事件 可以判断MTK方案和MTK自研
-            if re.search('GenericRecognitionEvent', self.log_lines[i]) is not None:
-                self.voice_trigger_scheme = 'MTK'
-            if re.search('MTK', self.log_lines[i]) is not None:
-                self.voice_trigger_scheme = 'MTK自研'
-            log_list = [self.log_lines[i]]
-            while i < rows:
-                i += 1
-                if i >= rows:
-                    break
-
-                if re.search('rice volume too low', self.log_lines[i]) is not None:
-                    reason = '唤醒时record增益导致的无法唤醒 \n'
-                    self.second_ladder_fail.append(reason)
-                if self.voice_trigger_scheme is None and re.search('getSoundModel:', self.log_lines[i]) is not None:
-                    if re.search('default', self.log_lines[i]) is not None:
-                        self.voice_trigger_scheme = '自研E'
-                    elif re.search('小爱', self.log_lines[i]) is not None:
-                        self.voice_trigger_scheme = '高通'
-
-                if re.search('setActive = -1000', self.log_lines[i]) is not None or re.search('commandId',
-                                                                                         self.log_lines[i]) is not None:
-                    if re.search('XATX', self.log_lines[i]) is not None or \
-                            (re.search('0', self.log_lines[i]) is not None and re.search('false', self.log_lines[i]) is not None):
-                        log_list.insert(0, '小爱同学')
-                    elif re.search('UDK', self.log_lines[i]) is not None or \
-                            (re.search('0', self.log_lines[i]) is not None and re.search('true', self.log_lines[i]) is not None):
-                        log_list.insert(0, '小爱自定义')
-                    elif re.search('FindPhone', self.log_lines[i]) is not None or re.search('1', self.log_lines[i]) is not None:
-                        log_list.insert(0, '小爱你在哪')
-
-                if re.search('PhraseWakeupResult', self.log_lines[i]) is not None and re.search(r"MIXWVPCallback",
-                                                                                           self.log_lines[i]) is not None:
-                    log_list.append(self.log_lines[i])
-
-                if re.search('SVA Wakeup', self.log_lines[i]) is not None:
-                    log_list.append(self.log_lines[i])
-
-                if re.search('onStartCommand action:', self.log_lines[i]) is not None:
-                    log_list.append(self.log_lines[i])
-
-                if not is_get_package_info and re.search('Package \[com.miui.voicetrigger\]', self.log_lines[i]) is not None:
-                    self.build_date = self.log_lines[i+10].split('=')[1]
-                    self.voice_trigger_version = self.log_lines[i+12].split('=')[1:]
-                    is_get_package_info = True
-
-                if not is_get_devie_code and re.search('Build fingerprint', self.log_lines[i]) is not None:
-                    self.device_code = self.log_lines[i].split(':')[1:]
-                    is_get_devie_code = True
-
-                if not is_processed_info and re.search('WakeupAudioUtils', self.log_lines[i]) is not None:
-                    self.voice_print_engine_version = self.log_lines[i+5].split('=')[1:]
-                    self.voice_print_engine_version += self.log_lines[i+6].split('=')[1:]
-                    self.voice_print_engine_version += self.log_lines[i+7].split('=')[1:]
-                    self.voice_print_engine_version += self.log_lines[i+8].split('=')[1:]
-                    is_processed_info = True
-
-                if re.search('onRecognition:', self.log_lines[i]) is not None:
-                    i -= 1
-                    break
-            self.event_list.append(log_list)
-
-
-    # 二级事件唤醒失败原因
-    def analysis_second_ladder_fail(self):
-        # 具体原因分析
-        if len(self.second_ladder_fail) != 0:
-            self.result_text.insert(tkinter.END, self.second_ladder_fail[0])
-        else:
-            self.result_text.insert(tkinter.END, '未知原因导致二级唤醒失败\n')
-
-    # 录入唤醒词失败
-    def analysis_record_fail(self):
-        pass   
-
-
-    # MTK方案
-    def process_mtk(self):
-        # MTK方案一次事件会触发两次唤醒
-        self.result_text.insert(tkinter.END, 'Note：MTK、MTK自研方案上报一次可能会无间隔触发两次唤醒！\n\n\n')
-        i = 1
-        for item in self.event_list:
-            self.result_text.insert(tkinter.END, '【一级事件】- ' + str(i) + ' - ')
-            if re.search('onRecognition:', item[0]) is not None:
-                item.insert(0, '小爱同学')
-            for line in item:
-                self.result_text.insert(tkinter.END, line + '\n\n')
-                if re.search('SVA Wakeup success', line) is not None:
-                    self.result_text.insert(tkinter.END, '唤醒成功！\n')
-                # 耳机事件唤醒失败，需要分析二级唤醒失败的具体原因
-                elif re.search('SVA Wakeup exception', line) is not None:
-                    self.result_text.insert(tkinter.END, '二级唤醒失败！\n')
-                    self.analysis_second_ladder_fail()
-
-            self.result_text.insert(tkinter.END, '\n\n\n')
-            i += 1
-
-    def process_e(self):
-        # 方案E
-        i = 1
-        for item in self.event_list:
-            self.result_text.insert(tkinter.END, '【一级事件】- ' + str(i) + ' - ')
-            for line in item:
-                self.result_text.insert(tkinter.END, line + '\n\n')
-                if re.search('data=0', line) is not None:
-                    self.result_text.insert(tkinter.END, '一级事件异常！(data = 0）\n\n')
-                if re.search('PhraseWakeupResult', line) is not None:
-                    # 添加上二级事件未唤醒的原因分析
-                    if re.search('isVoconWakeupPassed=false', line) is not None and re.search('isVBPassed=false', line) is not None:
-                        self.result_text.insert(tkinter.END, '二级失败：未通过唤醒引擎及声纹引擎！\n\n')
-                        self.analysis_second_ladder_fail()  # 输出
-                        continue
-                    elif re.search('isVoconWakeupPassed=false', line) is not None and re.search('isVBPassed=true', line) is not None:
-                        self.result_text.insert(tkinter.END, '二级失败：未通过唤醒引擎！\n\n')
-                        self.analysis_second_ladder_fail()
-                        continue
-                    elif re.search('isVoconWakeupPassed=true', line) is not None and re.search('isVBPassed=false', line) is not None:
-                        self.result_text.insert(tkinter.END, '二级失败：未通过声纹引擎！\n\n')
-                        self.analysis_second_ladder_fail()
-                        continue
+    # 定义一个unzipInerVoiceTriggerAudio函数
+    def unzipInerVoiceTriggerAudio(self, file, dest_path, dump_path):
+        try:
+            srcfile = zipfile.ZipFile(os.path.join(dest_path, file))
+            for file_name in srcfile.namelist():
+                srcfile.extract(file_name, dump_path,"18d0e1382aeab5274eada82f6cc747a9".encode("utf-8"))
+                if file_name.endswith('.zip'):
+                    self.recursive_unzip(os.path.basename(file_name), dump_path + "/" + os.path.dirname(file_name))
+                else:
+                    file_abspath = dump_path + file_name
+                    print("unzipInerVoiceTriggerAudio filelist:" + file_abspath)
+                    if file_name.endswith('.txt'):
+                        self.log_files.append(file_abspath)
                     else:
-                        self.result_text.insert(tkinter.END, '二级成功！\n\n')
-                        ed = self.line_timestamp(line)
-                if re.search('onStartCommand action:', line) is not None:
-                    self.result_text.insert(tkinter.END, '唤醒成功！\n')
-                    st = self.line_timestamp(item[1])
-                    ed = self.line_timestamp(item[len(item) - 2])
-                    self.result_text.insert(tkinter.END, '一级-->二级耗时：' + str(ed - st) + 'ms\n')
-            self.result_text.insert(tkinter.END, '\n\n')
-            i += 1
+                        self.pcm_files.append(file_abspath)
+                        self.convertPcmToWave(file_abspath)
+        except Exception as e:
+            # messagebox.showinfo(title="错误信息", message="解压失败或压缩文件损坏")
+            print("unzipInerVoiceTriggerAudio error:" + str(e))
+    
+    def recursive_unzip(self, file, dump_path):
+        # file_path用于解压缩文件；des_dir用于存放下一级的解压缩的同名目录
+        if dump_path.endswith('/'):
+            dump_path = dump_path[:-1]
+        print("@@@recursive_unzip path:" + dump_path + " --- file name " + file)
+        srcfile = zipfile.ZipFile(dump_path + "/" + file)
+        for file_name in srcfile.namelist():
+            srcfile.extract(file_name, dump_path)
+            if file_name.endswith('.zip'):
+                  self.recursive_unzip(os.path.basename(file_name), dump_path + "/" + os.path.dirname(file_name))
+            else:
+                file_abspath = dump_path + "/" + file_name
+                print("recursive_unzip file_abspath:" + file_abspath)
+                if file_name.endswith('.txt'):
+                    self.log_files.append(file_abspath)
+                else:
+                    self.pcm_files.append(file_abspath)
+                    self.convertPcmToWave(file_abspath)
+    
+    def convertPcmToWave(self, pcmfile):
+        # print("@@@@@@@@@@convert target:" + pcmfile[:-4] + '.wav')
+        pcmData = open(pcmfile, 'rb').read()
+        with wave.open(pcmfile[:-4] + '.wav', 'wb') as wavfile:
+            wavfile.setparams((1, 2, 16000, 0, 'NONE', 'NONE'))
+            wavfile.writeframes(pcmData)
 
-    # 高通方案
-    def process_qualcomm(self):
-        i = 1
-        for item in self.event_list:
-            self.result_text.insert(tkinter.END, '【一级事件】- ' + str(i) + ' - ')
-            if len(item) == 2:
-                for line in item:
-                    self.result_text.insert(tkinter.END, line + '\n\n')
-                self.result_text.insert(tkinter.END, '唤醒失败！\n\n\n\n')
-                continue
-            for line in item:
-                self.result_text.insert(tkinter.END, line + '\n\n')
-                if re.search('SVA Wakeup success', line) is not None:
-                    self.result_text.insert(tkinter.END, '唤醒成功！\n')
-                elif re.search('SVA Wakeup exception', line) is not None:
-                    self.result_text.insert(tkinter.END, '唤醒失败！\n')
-            self.result_text.insert(tkinter.END, '\n\n')
-            i += 1
-
-    def line_timestamp(self, line):
-        nowTime = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-        year = re.findall(r'\d{4}', nowTime)[0]
-        timestr = year + '-' + re.search(r'\d{2}-\d{2}[ ]\d{2}:\d{2}:\d{2}.\d{3}', line).group()
-        datetime_obj = datetime.strptime(timestr, "%Y-%m-%d %H:%M:%S.%f")
-        return int(time.mktime(datetime_obj.timetuple()) * 1000.0 + datetime_obj.microsecond / 1000.0)
+def analysis_start():
+    init_window = Tk()
+    analysis_window = LogAnalysisPro(init_window)
+    analysis_window.set_init_window()
+    init_window.mainloop()
 
 
-
+analysis_start()
