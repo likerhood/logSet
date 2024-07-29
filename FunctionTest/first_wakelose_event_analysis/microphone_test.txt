@@ -1,0 +1,12 @@
+07-15 14:24:28.970 10184  9250 28745 D AudioRecord: start(94): return status 0
+07-15 14:24:29.682 10184  9250 28745 D AudioRecord: stop(94): 0xb400007443c8f300, mActive: 1  packageName: com.miui.voiceassist
+07-15 14:24:29.780 10184  9250 28745 D AudioRecord: stop(94) done
+07-15 14:24:29.797 10184  9250 28745 D AudioRecord: stop(94): 0xb400007443c8f300, mActive: 0  packageName: com.miui.voiceassist
+07-15 14:24:29.798 10184  9250 28745 D AudioRecord: stop(94): 0xb400007443c8f300, mActive: 0  packageName: com.miui.voiceassist
+07-15 14:24:43.872  1000  4387  4387 D AudioRecord: start(98): 0xb400007443bcba60, sync event 0 trigger session 0 packageName: com.mediatek.voicecommand
+07-15 14:24:43.872  1000  4387  4387 D AudioRecord: start(98): 0xb400007443bcba60, sync event 0 trigger session 0 packageName: com.mediatek.voicecommand
+07-15 14:24:43.898  1000  4387  4387 D AudioRecord: start(98): return status 0
+07-15 14:27:07.311 10260  8079 11168 D AudioRecord: stop(86): 0xb400007443cbd0e0, mActive: 1  packageName: com.miui.screenrecorder
+07-15 14:27:07.395 10260  8079 11168 D AudioRecord: stop(86) done
+07-15 14:27:07.398 10260  8079 11168 D AudioRecord: stop(86): 0xb400007443cbd0e0, mActive: 0  packageName: com.miui.screenrecorder
+07-15 14:27:07.398 10260  8079 11168 D AudioRecord: stop(86): 0xb400007443cbd0e0, mActive: 0  packageName: com.miui.screenrecorder
